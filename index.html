@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gimbal BLE</title>
+    <style>
+        ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .button-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin: 20px;
+        }
+        button {
+            padding: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            word-break: break-word;
+        }
+
+        #setPropertyInputContainer {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            padding: 10px;
+            box-sizing: border-box;
+            background-color: #f0f0f0;
+            border-radius: 10px;
+            border: 1px solid #ccc;
+            z-index: 1001;
+        }
+
+        #setPropertyInput {
+            display: block;
+            width: 100%;
+            height: 36px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+            padding: 0 10px;
+        }
+
+        #setPropertyInputContainer button {
+            display: block;
+            width: 100%;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+        }
+
+        #overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            display: none;
+        }
+
+        .mainInput {
+            padding: 10px;
+            font-size: 16px;
+            display: block;
+        }
+
+        .log {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="overlay" onclick="closeOverlay()">
+        <div id="setPropertyInputContainer" style="display: none; margin-top: 10px;" onclick="event.stopPropagation()">
+            <input type="text" id="setPropertyInput" />
+            <button onclick="saveProperty()">SAVE</button>
+            <input type="hidden" id="currentProperty" />
+        </div>
+    </div>
+    <div id="bleReadValue" style="margin: 10px; padding: 5px; border: 1px solid #ccc; border-radius: 5px;"></div>
+    <div class="button-container">
+        <button onclick="findDevices()" id="pairDeviceButton">Pair Device</button>
+        <button onclick="disconnect()" id="disconnectButton" disabled>Disconnect</button>
+        <input type="number" min="0" max="180" class="mainInput" id="newNeutralPosition" /> 
+        <button onclick="setPitchNeutralPosition()">SET PITCH NEUTRAL POSITION</button>
+        <button onclick="setRollNeutralPosition()">SET ROLL NEUTRAL POSITION</button>
+    </div>
+
+    <script>
+        let characteristic;
+        let gatt;
+        const bleReadValue = document.getElementById('bleReadValue');
+        const deviceName = 'Gimbal';
+        const serviceUUID = '591ec76a-b57e-43dc-8e48-467d074e65ea';
+        const characteristicUUID = '7549acb0-dd55-4b04-ad89-d3961f43bed8';
+
+        // Base Method
+        async function sendBLECommand(command) {
+            if (!characteristic) {
+                alert('Brak połączenia z urządzeniem');
+                return;
+            }
+
+            await characteristic.writeValueWithResponse(stringToArrayBuffer(command));
+
+            const data = await readCharacteristicData();
+
+            return data;
+        }
+
+        async function sendBLECommandWithoutResponse(command) {
+            if (!characteristic) {
+                alert('Brak połączenia z urządzeniem');
+                return;
+            }
+
+            await characteristic.writeValueWithoutResponse(stringToArrayBuffer(command));
+        }
+
+        async function disconnect() {
+            characteristic.removeEventListener('characteristicvaluechanged', handleDataReceived);
+
+            await gatt.disconnect();
+
+            document.getElementById('pairDeviceButton').disabled = false;
+            document.getElementById('disconnectButton').disabled = true;
+
+            setResponse('Urządzenie odłączono');
+        }
+
+        // Initialization
+        async function findDevices() {
+            if (!navigator.bluetooth) {
+                alert('Bluetooth nie jest wspierany w tej przeglądarce');
+                return;
+            }
+
+            const device = await navigator.bluetooth.requestDevice({ 
+                filters: [{ namePrefix: deviceName }],
+                optionalServices: [serviceUUID]
+            });
+
+            const { id, name, gatt: receiveGatt } = device;
+
+            gatt = receiveGatt;
+
+            if (name !== deviceName) {
+                alert('Nieprawidłowe urządzenie');
+                await gatt.disconnect();
+                return;
+            }
+
+            const server = await gatt.connect();
+
+            device.addEventListener('gattserverdisconnected', () => {
+                document.getElementById('pairDeviceButton').disabled = false;
+                document.getElementById('disconnectButton').disabled = true;
+                setResponse('Urządzenie odłączono');
+            });
+
+            const service = await server.getPrimaryService(serviceUUID);
+            characteristic = await service.getCharacteristic(characteristicUUID);
+
+            characteristic.addEventListener('characteristicvaluechanged', handleDataReceived);
+
+            await characteristic.startNotifications();
+
+            document.getElementById('pairDeviceButton').disabled = true;
+            document.getElementById('disconnectButton').disabled = false;
+
+            setResponse('Połączono z urządzeniem');
+        }
+
+        function stringToArrayBuffer(string) {
+            const encoder = new TextEncoder();
+            return encoder.encode(string).buffer;
+        }
+
+        function ArrayBufferToString(arrayBuffer) {
+            const decoder = new TextDecoder();
+            return decoder.decode(arrayBuffer);
+        }
+
+        function setResponse(response) {
+            bleReadValue.innerHTML = response;
+        }
+
+        function addResponse(response) {
+            bleReadValue.innerHTML += response;
+        }
+
+        function handleDataReceived(dataReceived) {
+            const parsedData = ArrayBufferToString(dataReceived.target.value);
+
+            setResponse(parsedData);
+        }
+
+        async function readCharacteristicData() {
+            const response = await characteristic.readValue();
+
+            if (!response) {
+                return '';
+            }
+
+            const responseString = ArrayBufferToString(response);
+            const [{ commandType, data }] = JSON.parse(responseString);
+            
+            return data;
+        }
+
+
+        async function setPitchNeutralPosition() {
+            const newNeutralPosition = document.getElementById('newNeutralPosition').value;
+
+            const response = await sendBLECommand(`SET_PITCH_NEUTRAL_POSITION ${newNeutralPosition}`);
+
+            setResponse(response);
+        }
+
+        async function setRollNeutralPosition() {
+            const newNeutralPosition = document.getElementById('newNeutralPosition').value;
+
+            const response = await sendBLECommand(`SET_ROLL_NEUTRAL_POSITION ${newNeutralPosition}`);
+
+            setResponse(response);
+        }
+
+    </script>
+</body>
+</html>
+
