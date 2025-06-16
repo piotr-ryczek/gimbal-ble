@@ -88,9 +88,19 @@
     <div class="button-container">
         <button onclick="findDevices()" id="pairDeviceButton">Pair Device</button>
         <button onclick="disconnect()" id="disconnectButton" disabled>Disconnect</button>
+        <button onclick="getPitchNeutralPosition()">GET PITCH NEUTRAL POSITION</button>
+        <button onclick="getRollNeutralPosition()">GET ROLL NEUTRAL POSITION</button>
+        <hr />
         <input type="number" min="0" max="180" class="mainInput" id="newNeutralPosition" /> 
         <button onclick="setPitchNeutralPosition()">SET PITCH NEUTRAL POSITION</button>
         <button onclick="setRollNeutralPosition()">SET ROLL NEUTRAL POSITION</button>
+        <hr />
+        <button onclick="setPitchReversedPosition()">SET PITCH REVERSED</button>
+        <button onclick="setPitchNonReversedPosition()">SET PITCH NON REVERSED</button>
+        <hr />
+        <button onclick="setRollReversedPosition()">SET ROLL REVERSED</button>
+        <button onclick="setRollNonReversedPosition()">SET ROLL NON REVERSED</button>
+        
     </div>
 
     <script>
@@ -232,6 +242,41 @@
             setResponse(response);
         }
 
+        async function setPitchReversedPosition() {
+            const response = await sendBLECommand(`SET_PITCH_IS_REVERSED 1`);
+
+            setResponse(response);
+        }
+
+        async function setPitchNonReversedPosition() {
+            const response = await sendBLECommand(`SET_PITCH_IS_REVERSED 0`);   
+
+            setResponse(response);
+        }
+
+        async function setRollReversedPosition() {
+            const response = await sendBLECommand(`SET_ROLL_IS_REVERSED 1`);
+
+            setResponse(response);
+        }
+
+        async function setRollNonReversedPosition() {
+            const response = await sendBLECommand(`SET_ROLL_IS_REVERSED 0`);
+
+            setResponse(response);
+        }
+
+        async function getPitchNeutralPosition() {
+            const response = await sendBLECommand(`GET_PITCH_NEUTRAL_POSITION`);
+
+            setResponse(response);
+        }
+
+        async function getRollNeutralPosition() {
+            const response = await sendBLECommand(`GET_ROLL_NEUTRAL_POSITION`);
+
+            setResponse(response);
+        }
     </script>
 </body>
 </html>
